@@ -92,6 +92,7 @@ fn main() {
             }
             Err(e) => {
                 error!("[EXAMPLE]send error : {:?}", e);
+                break;
             }
         };
 
@@ -106,6 +107,7 @@ fn main() {
             }
             Err(e) => {
                 error!("[EXAMPLE] receive error : {:?}", e);
+                break;
             }
         };
 
@@ -115,7 +117,7 @@ fn main() {
 
     }
 
-    s.close();
+    LWNSIM.lock().unwrap().disconnect();
 
     
 }
