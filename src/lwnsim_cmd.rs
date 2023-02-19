@@ -4,42 +4,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use typetag;
 
-use log::error;
-use std::error::Error;
-
-
-
+use log::{error, warn};
 use rust_socketio::Payload;
+//use std::error::Error;
+use super::error::{Error, Result};
+use super::lora_events::LoraEvents;
+
 // simulator commands CMD_LINK_DEV,CMD_UNLINK_DEV,CMD_JOIN_REQUEST,CMD_SEND_UPLINK,CMD_RECV_DOWNLINK
 pub static CMD_LINK_DEV: &str = "link-dev";
 pub static CMD_UNLINK_DEV: &str = "unlink-dev";
 pub static CMD_JOIN_REQUEST: &str = "join-request";
 pub static CMD_SEND_UPLINK: &str = "send-uplink";
 pub static CMD_RECV_DOWNLINK: &str = "recv-downlink";
-
-// response-cmd errors
-pub static DEV_CMD_OK: usize = 0;
-pub static DEV_CMD_TIMEOUT: usize = 1;
-pub static DEV_ERROR_NO_DEVICE_WITH_DEVEUI: usize = 2;
-pub static DEV_ERROR_NIY: usize = 3;
-pub static DEV_ERROR_DEVICE_NOT_LINKED: usize = 4;
-pub static DEV_ERROR_DEVICE_TURNED_OFF: usize = 5;
-pub static DEV_ERROR_DEVICE_NOT_JOINED: usize = 6;
-pub static DEV_ERROR_DEVICE_ALREADY_JOINED: usize = 7;
-pub static DEV_ERROR_NO_DATA_DOWNLINK_RECV: usize = 8;
-pub static DEV_ERROR_SIMULATOR_NOT_RUNNING: usize = 9;
-pub static CMD_ERROR_NAME: &'static [&'static str] = &[
-    "DevCmdOK",
-    "DevCmdTimeout",
-    "NoDeviceWithDevEUI",
-    "NIY",
-    "DeviceNotlinked",
-    "DeviceTurnedOff",
-    "DeviceNotJoined",
-    "DeviceAlreadyJoined",
-    "NoDataDWrecv",
-    "SimulatorNotRunning",
-];
 
 pub trait DevExecuteCmdTrait {
     fn get_cmd(&self) -> &str;
@@ -138,15 +114,19 @@ pub struct DevAckCmd {
 #[typetag::serde(tag = "type")]
 pub trait DevResponseCmdTrait {
     fn get_cmd(&self) -> &str;
-    fn get_error(&self) -> usize;    
-    fn get_mtype(&self) -> &str;
-    fn get_payload(&mut self) -> Option<String>;
+    fn get_error(&self) -> CmdErrorKind;
+    fn get_mtype(&self) -> &str {
+        return "";
+    }
+    fn get_payload(&mut self) -> String {
+        return "".to_string();
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DevResponseCmd {
     pub cmd: String,
-    pub error: usize,
+    pub error: CmdErrorKind,
 }
 
 #[typetag::serde]
@@ -154,47 +134,10 @@ impl DevResponseCmdTrait for DevResponseCmd {
     fn get_cmd(&self) -> &str {
         return &self.cmd;
     }
-    fn get_error(&self) -> usize {
-        return self.error;
-    }
-
-    fn get_mtype(&self) -> &str {
-        return "";
-    }
-
-    fn get_payload(&mut self) -> Option<String>{
-        return None;
+    fn get_error(&self) -> CmdErrorKind {
+        return self.error.clone();
     }
 }
-
-/* pub fn deser_payload(resp: Payload) -> Box<dyn DevResponseCmdTrait> {
-let mut resp_struct : Box<dyn DevResponseCmdTrait> = Box::new(DevNoResponseCmd{}) ;
-
-if let Payload::String(data) = resp {
-    let object: Value = serde_json::from_str(&data).unwrap();
-
-    if let Value::String(cmd_name) = &*object.get("cmd").unwrap() {
-        if (cmd_name == CMD_LINK_DEV || cmd_name == CMD_UNLINK_DEV) {
-                let tmp : DevResponseCmd = from_value(object).unwrap();
-                resp_struct = Box::new(tmp);
-        }
-        else if cmd_name == CMD_RECV_DOWNLINK  {
-                 let tmp: DevResponseRecvDownlinkCmd = from_value(object).unwrap();
-                 resp_struct = Box::new(tmp);
-        }
-        else{
-                let tmp = DevNoResponseCmd{};
-                resp_struct = Box::new(tmp);
-        }
-    }else {
-       error!("DevResponseCmd json error");
-    }
-}
-else{
-        error!("Payload : not the String variant error");
-    }
-    return resp_struct;
-} */
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DevNoResponseCmd {}
@@ -204,26 +147,17 @@ impl DevResponseCmdTrait for DevNoResponseCmd {
     fn get_cmd(&self) -> &str {
         return "";
     }
-    fn get_error(&self) -> usize {
-        return 0;
-    }
-
-    fn get_mtype(&self) -> &str {
-        return "";
-    }
-
-    fn get_payload(&mut self) -> Option<String>{
-        return None;
+    fn get_error(&self) -> CmdErrorKind {
+        return CmdErrorKind::DevCmdOK;
     }
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DevResponseRecvDownlinkCmd {
     pub cmd: String,
-    pub error: usize,
+    pub error: CmdErrorKind,
     pub mtype: String,
-    pub payload: Option<String>,
+    pub payload: Option<String>, // is an Option so that String can be moved out with take()
 }
 
 #[typetag::serde]
@@ -231,19 +165,90 @@ impl DevResponseCmdTrait for DevResponseRecvDownlinkCmd {
     fn get_cmd(&self) -> &str {
         return &self.cmd;
     }
-    fn get_error(&self) -> usize {
-        return self.error;
+    fn get_error(&self) -> CmdErrorKind {
+        return self.error.clone();
     }
-
     fn get_mtype(&self) -> &str {
         return &self.mtype;
     }
-
-    fn get_payload(&mut self) -> Option<String>{
-        return self.payload.take();
+    fn get_payload(&mut self) -> String {
+        return self.payload.take().unwrap();
     }
 }
-#[derive(Debug, Deserialize)]
-pub struct DevLoRaEvent {
-    event: usize,
+
+pub fn parse_resp_cmd(resp_msg: Payload) -> Result<Box<dyn DevResponseCmdTrait>> {
+    if let Payload::String(json_str) = resp_msg {
+        let object: Value = serde_json::from_str(&json_str).unwrap();
+        if let Value::String(cmd_name) = &object[0]["cmd"] {
+            if cmd_name == CMD_LINK_DEV || cmd_name == CMD_UNLINK_DEV {
+                let resp_cmd: DevResponseCmd =
+                    serde_json::from_value(object[0].clone()).expect("json deserialization failed");
+                return Ok(Box::new(resp_cmd));
+            } else
+            /*if cmd_name == CMD_RECV_DOWNLINK*/
+            {
+                let resp_cmd: DevResponseRecvDownlinkCmd =
+                    serde_json::from_value(object[0].clone()).expect("json deserialization failed");
+                return Ok(Box::new(resp_cmd));
+            }
+        } else {
+            warn!("[LWNSIM] DevResponseCmd json error");
+            return Err(Error::CmdError(CmdErrorKind::PayloadJsonError));
+        }
+    } else {
+        return Err(Error::CmdError(CmdErrorKind::PayloadNotStringVariant));
+    }
 }
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DevLoraEvent {
+    pub event: LoraEvents,
+}
+
+
+
+use serde_repr::*;
+
+#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone)]
+#[repr(u32)]
+pub enum CmdErrorKind {
+    DevCmdOK=0,
+    DevCmdTimeout=1,
+    NoDeviceWithDevEUI=2,
+    NIY=3,
+    DeviceNotlinked=4,
+    DeviceTurnedOff=5,
+    DeviceNotJoined=6,
+    DeviceAlreadyJoined=7,
+    NoDataDWrecv=8,
+    SimulatorNotRunning=9,
+    PayloadNotStringVariant=10,
+    PayloadJsonError=11,
+    UnexpectedError=12,
+}
+use std::fmt;
+impl fmt::Display for CmdErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            CmdErrorKind::DevCmdOK => "Cmd OK",
+            CmdErrorKind::DevCmdTimeout => "Cmd timeout",
+            CmdErrorKind::NoDeviceWithDevEUI => "No device found with given devEUI",
+            CmdErrorKind::NIY => "Not implemented yet",
+            CmdErrorKind::DeviceNotlinked => "Device not linked",
+            CmdErrorKind::DeviceTurnedOff => "Device turned off or simulator stopped",
+            CmdErrorKind::DeviceNotJoined => "Device not joined",
+            CmdErrorKind::DeviceAlreadyJoined => {
+                "Device already joined (rejoining not implemented yet)"
+            }
+            CmdErrorKind::NoDataDWrecv => "No downlink userdata received ",
+            CmdErrorKind::SimulatorNotRunning => "Simulator not running",
+            CmdErrorKind::PayloadNotStringVariant => "Payload not the String variant",
+            CmdErrorKind::PayloadJsonError => "Error in parsing json",
+            CmdErrorKind::UnexpectedError => "Unexpected error",
+        };
+        write!(f, "{}", name)
+    }
+}
+
+

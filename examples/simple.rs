@@ -11,12 +11,12 @@ use ctrlc;
 
 // log
 use env_logger::{Builder, Env};
-use log::{info, trace, warn, LevelFilter};
+use log::{error, info, trace, warn, LevelFilter};
 
 static URL: &str = "http://localhost:8000";
 static DEV_EUI: &str = "359ac7cd01bc8aff";
-static APP_KEY: &str = "f1c4081b61e9bee79bef58b5347e78a5";
-static JOIN_EUI: &str = "0000000000000000";
+static APP_KEY: &str = "f1c4081b61e9bee79bef58b5347e78a5"; // set as device info in LWNSim
+static JOIN_EUI: &str = "0000000000000000"; // set as device info in LWNSim
 
 static CTRLC_SEEN : AtomicBool = AtomicBool::new(false);
 
@@ -28,16 +28,10 @@ fn configure_log() {
 
     Builder::from_env(env)
         .filter_module("lwnsim_api_rs", LevelFilter::Trace)
-        .filter_module("simple", LevelFilter::Trace)
+        .filter_module("simple", LevelFilter::Info)
         .init();
 }
 
-/* pub fn log(msg: String) {
-    if self.log_enable {
-        let now: DateTime<Utc> = Utc::now();
-        println!("{} [LWNSIM]{}", now.format("%Y-%m-%d %H:%M:%S"), msg);
-    }
-} */
 
 fn main() {
     // The `Env` lets us tweak what the environment
@@ -45,26 +39,23 @@ fn main() {
     // value is if they're missing
     ctrlc::set_handler( || {
         info!("[EXAMPLE] received Ctrl+C!");
-        CTRLC_SEEN.store(false,Ordering::Relaxed);
+        CTRLC_SEEN.store(true,Ordering::Relaxed);
     })
     .expect("Error setting Ctrl-C handler");
 
+    let dur_1s = time::Duration::from_secs(1);
+
     configure_log();
+// creates lazily LWNSIM and connects to LWN simulator
+    LWNSIM.lock().unwrap().connect(URL, DEV_EUI);
 
-    LWNSIM.lock().unwrap().set_dev_eui(DEV_EUI.to_string());
+    thread::sleep(dur_1s);
 
-    let dur = time::Duration::from_secs(1);
-
-    LWNSIM.lock().unwrap().connect(URL);
-
-    thread::sleep(dur);
-
+    info!("[EXAMPLE] link to dev {:?}", DEV_EUI);
     LWNSIM.lock().unwrap().link_dev();
 
-    let dev_eui=LORA.lock().unwrap().get_dev_eui().to_string();
-    trace!("[EXAMPLE] linked to dev {:?}", dev_eui);
 
-    thread::sleep(dur);
+    thread::sleep(dur_1s);
 
     //   lora=LoRa.LoRa( mode=LoRa.LORAWAN, region=LoRa.EU868, log_enable=True)
 
@@ -73,17 +64,17 @@ fn main() {
     //app_key = binascii.unhexlify('2CC172969D5CC26382E0AD054568CE3E'.replace(' ',''))
     //app_key = binascii.unhexlify(''.replace(' ',''))
 
-    trace!("[EXAMPLE] start join");
+    info!("[EXAMPLE] start dev joining");
     LORA.lock().unwrap().join(
         OTAA,
         (JOIN_EUI.to_string(), APP_KEY.to_string()),
-        Some(0),
-        Some(0),
+        Some(0),  // not used 
+        Some(0), // not used LWNSim manages DR depending on device info
     );
 
     while !LORA.lock().unwrap().has_joined() {
-        thread::sleep(dur);
-        info!("Not yet joined...");
+        thread::sleep(dur_1s);
+        info!("[EXAMPLE] Not yet joined...");
     }
 
     let mut s = Socket::new(AF_LORA, SOCK_RAW);
@@ -97,24 +88,24 @@ fn main() {
         let res = s.send("Hello");
         match res {
             Ok(()) => {
-                info!(">>>>>> Hello >>>>>>>>");
+                info!("[EXAMPLE]>>>>>> Hello >>>>>>>>");
             }
             Err(e) => {
-                info!("error in sending {:?}", e);
+                error!("[EXAMPLE]send error : {:?}", e);
             }
         };
 
-        thread::sleep(dur);
+        thread::sleep(dur_1s);
 
         s.setblocking(false);
         s.settimeout(Some(3));
         let res = s.recv(2000);
         match res {
             Ok(resp) => {
-                info!("<<<<<<<<<< {:?} <<<<<<<<<<<", resp);
+                info!("[EXAMPLE]<<<<<<<<<< {:?} <<<<<<<<<<<", resp);
             }
             Err(e) => {
-                info!("error in receiving{:?}", e);
+                error!("[EXAMPLE] receive error : {:?}", e);
             }
         };
 
