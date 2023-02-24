@@ -31,12 +31,14 @@ pub static CONFIRMED_DATA_UP: &str = "ConfirmedDataUp";
     return;
 } */
 
+#[derive(Debug)]
 pub struct Socket {
     confirmed: bool,
     blocking: bool,
     timeout: Option<usize>,
     dr: usize,
 }
+
 
 impl Socket {
     pub fn new(af: usize, socket_t: usize) -> Socket {
