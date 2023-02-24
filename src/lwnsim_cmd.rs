@@ -112,9 +112,10 @@ pub struct DevAckCmd {
 }
 
 #[typetag::serde(tag = "type")]
-pub trait DevResponseCmdTrait {
+pub trait ResponseCmdTrait {
     fn get_cmd(&self) -> &str;
     fn get_error(&self) -> CmdErrorKind;
+    // following metyhods for LoraDev commands
     fn get_mtype(&self) -> &str {
         return "";
     }
@@ -130,7 +131,7 @@ pub struct DevResponseCmd {
 }
 
 #[typetag::serde]
-impl DevResponseCmdTrait for DevResponseCmd {
+impl ResponseCmdTrait for DevResponseCmd {
     fn get_cmd(&self) -> &str {
         return &self.cmd;
     }
@@ -143,7 +144,7 @@ impl DevResponseCmdTrait for DevResponseCmd {
 pub struct DevNoResponseCmd {}
 
 #[typetag::serde]
-impl DevResponseCmdTrait for DevNoResponseCmd {
+impl ResponseCmdTrait for DevNoResponseCmd {
     fn get_cmd(&self) -> &str {
         return "";
     }
@@ -161,7 +162,7 @@ pub struct DevResponseRecvDownlinkCmd {
 }
 
 #[typetag::serde]
-impl DevResponseCmdTrait for DevResponseRecvDownlinkCmd {
+impl ResponseCmdTrait for DevResponseRecvDownlinkCmd {
     fn get_cmd(&self) -> &str {
         return &self.cmd;
     }
@@ -176,7 +177,7 @@ impl DevResponseCmdTrait for DevResponseRecvDownlinkCmd {
     }
 }
 
-pub fn parse_resp_cmd(resp_msg: Payload) -> Result<Box<dyn DevResponseCmdTrait>> {
+pub fn parse_resp_cmd(resp_msg: Payload) -> Result<Box<dyn ResponseCmdTrait>> {
     if let Payload::String(json_str) = resp_msg {
         let object: Value = serde_json::from_str(&json_str).unwrap();
         if let Value::String(cmd_name) = &object[0]["cmd"] {
@@ -217,8 +218,8 @@ pub enum CmdErrorKind {
     DevCmdTimeout=1,
     NoDeviceWithDevEUI=2,
     NIY=3,
-    DeviceNotlinked=4,
-    DeviceTurnedOff=5,
+    DeviceNotLinked=4, // device status = Inactive
+    DeviceLinked=5, // device status = Active, Joined or Unjoined
     DeviceNotJoined=6,
     DeviceAlreadyJoined=7,
     NoDataDWrecv=8,
@@ -235,11 +236,11 @@ impl fmt::Display for CmdErrorKind {
             CmdErrorKind::DevCmdTimeout => "Cmd timeout",
             CmdErrorKind::NoDeviceWithDevEUI => "No device found with given devEUI",
             CmdErrorKind::NIY => "Not implemented yet",
-            CmdErrorKind::DeviceNotlinked => "Device not linked",
-            CmdErrorKind::DeviceTurnedOff => "Device turned off or simulator stopped",
-            CmdErrorKind::DeviceNotJoined => "Device not joined",
+            CmdErrorKind::DeviceNotLinked => "device status : unlinked",
+            CmdErrorKind::DeviceLinked => "device status : linked",
+            CmdErrorKind::DeviceNotJoined => "device status : not joined",
             CmdErrorKind::DeviceAlreadyJoined => {
-                "Device already joined (rejoining not implemented yet)"
+                "device status : already joined (rejoining not implemented yet)"
             }
             CmdErrorKind::NoDataDWrecv => "No downlink userdata received ",
             CmdErrorKind::SimulatorNotRunning => "Simulator not running",

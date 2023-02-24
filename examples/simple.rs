@@ -1,7 +1,7 @@
 #![allow(unused)]
 #![allow(while_true)]
 
-use lwnsim_api_rs::lorawan::*;
+use lwnsim_api_rs::lora_dev::*;
 use lwnsim_api_rs::lwnsim::*;
 use lwnsim_api_rs::socket::*;
 
@@ -46,20 +46,23 @@ fn main() {
     let dur_1s = time::Duration::from_secs(1);
 
     configure_log();
-// creates lazily LWNSIM and connects to LWN simulator
-    LWNSIM.lock().unwrap().connect(URL, DEV_EUI);
+// creates lazy static LWNSIM and connects to LWN simulator
+    LWNSIM.lock().unwrap().connect(URL, DEV_EUI); // panic if socketio client connection fails
 
     thread::sleep(dur_1s);
-
-    info!("[EXAMPLE] link to dev {:?}", DEV_EUI);
-    LWNSIM.lock().unwrap().link_dev();
-
-
-    thread::sleep(dur_1s);
-
+  
     //   lora=LoRa.LoRa( mode=LoRa.LORAWAN, region=LoRa.EU868, log_enable=True)
+    info!("[EXAMPLE] link to dev {:?}", DEV_EUI);
+    LORA.lock().unwrap().activate().map_err(|e| {error!("Could not activate device (error : {:?})",e); /* LWNSIM.lock().unwrap().disconnect() */; return 1;});
 
-    //create an OTAA authentication parameters
+
+
+    thread::sleep(dur_1s);
+
+
+
+    // lora.join(...)
+    // create an OTAA authentication parameters
     //app_eui = binascii.unhexlify('0000000000000000'.replace(' ',''))
     //app_key = binascii.unhexlify('2CC172969D5CC26382E0AD054568CE3E'.replace(' ',''))
     //app_key = binascii.unhexlify(''.replace(' ',''))

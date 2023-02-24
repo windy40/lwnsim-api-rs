@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use super::lorawan::*;
+use super::lora_dev::*;
 use super::lora_events::LoraEvents;
 use super::lwnsim_cmd::CmdErrorKind;
 use super::error::{Result,Error};
@@ -72,6 +72,8 @@ impl Socket {
 
     pub fn close(&self) {}
 
+/// send a string as a Lora data payload
+/// the payload will be encoded as base64 by the simulator
     pub fn send(&self, data: &str) -> Result<()> {
         let mut mtype: &str = UNCONFIRMED_DATA_UP;
         if self.confirmed {

@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use super::error::{Error, Result};
 use super::lora_events::LoraEvents;
-use super::lorawan::LORA;
+use super::lora_dev::LORA;
 use super::lwnsim_cmd::*;
 
 // log
@@ -85,9 +85,6 @@ impl Lwnsim {
         self.timeout_cmd=timeout;
     } */
 
-    fn set_status(&mut self, status: LwnsimStatus) {
-        self.status = status;
-    }
 
     pub fn connect(&mut self, url: &str, dev_eui: &str) {
         self.url = Some(url.to_string());
@@ -96,26 +93,15 @@ impl Lwnsim {
 
         let socket = ClientBuilder::new(url.to_string())
             .namespace("/dev")
-            .on("open", |_, _| info!("Connected"))
-            .on("close", |_, _| info!("Disconnected !"))
+            .on("open", |_, _| info!("[LWNSIM][Socket event] Connected"))
+            .on("close", |_, _| info!("[LWNSIM][Socket event] Disconnected"))
             .on(DEV_EVENT_ACK_CMD, |payload, _: RawClient| {
                 if let Payload::String(s) = payload {
                     trace!("[LWNSIM][CMD_ACK][cmd]{:?}", s);
                 };
             })
             .on(DEV_EVENT_LORA, |payload, _: RawClient| {
-                /*                 if let Payload::String(json_str) = payload {
-                    trace!("[LWNSIM][LORA EVENT]{:?}", json_str);
-                    let object: Value = serde_json::from_str(&json_str).unwrap();
-                    if let Value::Number(nb) = &object["event"] {
-                        let mut event_id: usize = nb.as_u64().unwrap() as usize;
-                        LWNSIM.lock().unwrap().push_lora_event(event_id);
-                    } else {
-                        warn!("[LWNSIM] DevResponseCmd json error");
-                    }
-                } else {
-                    warn!("[LWNSIM] Payload error : not the String variant");
-                } */
+
                 if let Payload::String(pl_str) = payload {
                     trace!("[LWNSIM][LORA EVENT]{:?}", pl_str);
                     let lora_event: DevLoraEvent = serde_json::from_str(&pl_str)
@@ -129,57 +115,26 @@ impl Lwnsim {
             .opening_header("accept-encoding", "application/json")
             .connect()
             .expect("Connection failed");
+        trace!("[LWNSIM][connect]");
         self.socket = Some(socket);
         self.status = LwnsimStatus::ConnOK;
     }
 
     pub fn disconnect(&self) {
         if let Some(s) = &self.socket {
-            trace!("[LWNSIM] disconnecting");
+            trace!("[LWNSIM][disconnect]");
             s.disconnect().expect("Disconnect failed");
         }
     }
 
-    pub fn link_dev(&mut self) {
-        let msg = DevExecuteCmd {
-            cmd: CMD_LINK_DEV.to_string(),
-            ack: true,
-            dev_eui: self.get_dev_eui().to_string(),
-        };
-        self.status = LwnsimStatus::ConnLinkDevInit;
-        if let Ok(Some(cmd_resp)) = self.send_cmd(msg, SendMode::Call) {
-            if cmd_resp.get_error() == CmdErrorKind::DevCmdOK {
-                self.set_status(LwnsimStatus::ConnLinkDevOK);
-            } else {
-                self.set_status(LwnsimStatus::ConnLinkDevNOK);
-            }
-        } else {
-        }
-    }
 
-    pub fn unlink_dev(&mut self) {
-        let msg = DevExecuteCmd {
-            cmd: CMD_UNLINK_DEV.to_string(),
-            ack: true,
-            dev_eui: self.get_dev_eui().to_string(),
-        };
-        self.status = LwnsimStatus::ConnUnlinkDevInit;
-
-        if let Ok(Some(cmd_resp)) = self.send_cmd(msg, SendMode::Call) {
-            if cmd_resp.get_error() == CmdErrorKind::DevCmdOK {
-                self.set_status(LwnsimStatus::ConnUnlinkDevOK);
-            } else {
-                self.set_status(LwnsimStatus::ConnUnlinkDevNOK);
-            }
-        } else {
-        }
-    }
 
     pub fn send_cmd(
         &mut self,
         mut msg: impl DevExecuteCmdTrait + serde::Serialize,
         mode: SendMode,
-    ) -> Result<Option<Box<dyn DevResponseCmdTrait>>> {
+    ) -> Result<Option<Box<dyn ResponseCmdTrait>>> {
+
         if self.ack_cmd {
             msg.set_ack(true);
         }
@@ -228,7 +183,7 @@ impl Lwnsim {
                         if resp_cmd.get_error() == CmdErrorKind::SimulatorNotRunning
                             || resp_cmd.get_error() == CmdErrorKind::NoDeviceWithDevEUI
                         {
-                            self.set_status(LwnsimStatus::ConnUnlinkDevOK); //automatically unlink device 
+                            //self.set_status(LwnsimStatus::ConnUnlinkDevOK); //automatically unlink device 
                             self.disconnect(); 
                             return Err(Error::CmdError(resp_cmd.get_error()));
                         } else {
