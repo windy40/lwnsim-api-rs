@@ -19,6 +19,6 @@ mod lora_events;
 mod socket;
 
 pub use lwnsim::LWNSIM;
-pub use lora_dev::{LORA, OTAA};
+pub use lora_dev::*;
 pub use socket::*;
  
