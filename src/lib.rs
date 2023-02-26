@@ -11,9 +11,14 @@
 //!
 //! This is still work in progress, but I would be happy to share with anyone interested in the simulation of Lora devices.
 
-pub  mod lwnsim;
-pub  mod lwnsim_cmd;
-pub mod error;
-pub mod lora_dev;
-pub mod lora_events;
-pub mod socket;
+mod lwnsim;
+mod lwnsim_cmd;
+mod error;
+mod lora_dev;
+mod lora_events;
+mod socket;
+
+pub use lwnsim::LWNSIM;
+pub use lora_dev::{LORA, OTAA};
+pub use socket::*;
+ 
