@@ -116,7 +116,6 @@ impl Socket {
     }
 
     pub fn recv(&self, buffersize: usize) -> Result<String> {
-        debug!("[SOCKET][recv]Buffersize={}", buffersize);
         if self.blocking {
             debug!("[SOCKET][blocking recv]Buffersize={}", buffersize);
             LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
