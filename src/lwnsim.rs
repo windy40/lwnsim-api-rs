@@ -10,8 +10,8 @@ use std::sync::Mutex;
 
 
 use super::error::{Error, Result};
-use super::lora_events::LoraEvents;
-use super::lora_dev::LORA;
+use super::lora_events::{LORA_EVENTS,LoraEvents};
+//use super::lora_dev::LORA;
 use super::lwnsim_cmd::*;
 
 // log
@@ -201,6 +201,6 @@ impl Lwnsim {
 
 
     pub fn push_lora_event(&self, event_val: LoraEvents) {
-        LORA.lock().unwrap().handle_lora_event(event_val);
+        LORA_EVENTS.lock().unwrap().handle_lora_event(event_val);
     }
 }

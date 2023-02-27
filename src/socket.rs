@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use super::lora_dev::*;
-use super::lora_events::LoraEvents;
+use super::lora_events::{LORA_EVENTS,LoraEvents};
 use super::lwnsim_cmd::CmdErrorKind;
 use super::error::{Result,Error};
 // log
@@ -81,38 +81,35 @@ impl Socket {
         if self.confirmed {
             mtype = CONFIRMED_DATA_UP;
         }
-        trace!("[SOCKET][send]MType= {} data= {}", mtype, data);
 
         if self.blocking {
-            LORA.lock().unwrap().clear_event(LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT);
+            trace!("[SOCKET][blocking send (timeout= {:?})]MType= {} data= {}",self.timeout, mtype, data);           
+            LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT);
+        }else{
+            trace!("[SOCKET][send]MType= {} data= {}", mtype, data);
         }
 
         LORA.lock().unwrap().send(mtype, data)?;
 
         if self.blocking {
-            let mut events = LORA.lock().unwrap().get_events();
             if let Some(dur) = self.timeout {
                 let start_time = Instant::now();
-                while events & (LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT) == LoraEvents::NO_LORA_EVENT {
+                while ! LORA_EVENTS.lock().unwrap().intersects(LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT) {
                     if start_time.elapsed().as_secs() > dur.try_into().unwrap() {
                         return Err(Error::CmdError(CmdErrorKind::DevCmdTimeout));
                     }
                     thread::sleep(Duration::from_secs(1));
-                    events = LORA.lock().unwrap().get_events();
                 }
             } else {
-                while events & (LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT)== LoraEvents::NO_LORA_EVENT {
+                while ! LORA_EVENTS.lock().unwrap().intersects(LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT) {
                     thread::sleep(Duration::from_secs(1));
-                    events = LORA.lock().unwrap().get_events();
                 }
             }
-            if events & LoraEvents::TX_PACKET_EVENT != LoraEvents::NO_LORA_EVENT {
+            if LORA_EVENTS.lock().unwrap().contains_and_remove_event(LoraEvents::TX_PACKET_EVENT) {
                 trace!("[SOCKET][blocking send] sucess");
-                LORA.lock().unwrap().clear_event(LoraEvents::TX_PACKET_EVENT);
             }
-            if events & LoraEvents::TX_FAILED_EVENT != LoraEvents::NO_LORA_EVENT {
+            if LORA_EVENTS.lock().unwrap().contains_and_remove_event(LoraEvents::TX_FAILED_EVENT){
                 trace!("[SOCKET][blocking send] failed");
-                LORA.lock().unwrap().clear_event(LoraEvents::TX_FAILED_EVENT);
             }
         }
         Ok(())
@@ -121,7 +118,7 @@ impl Socket {
     pub fn recv(&self, buffersize: usize) -> Result<String> {
         trace!("[SOCKET][recv]Buffersize={}", buffersize);
         if self.blocking {
-            LORA.lock().unwrap().clear_event(LoraEvents::RX_PACKET_EVENT);
+            LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
         }
         let mut recv_buf = LORA.lock().unwrap().recv(buffersize);
         match recv_buf {
@@ -130,21 +127,21 @@ impl Socket {
                     if let Some(dur) = self.timeout {
 
                         let start_time = Instant::now();
-                        while LORA.lock().unwrap().get_events() & LoraEvents::RX_PACKET_EVENT == LoraEvents::NO_LORA_EVENT {
+                        while ! LORA_EVENTS.lock().unwrap().contains(LoraEvents::RX_PACKET_EVENT) {
                             if start_time.elapsed().as_secs() > dur.try_into().unwrap() {
                                 return Err(Error::CmdError(CmdErrorKind::DevCmdTimeout));
                             }
                             thread::sleep(Duration::from_secs(1));
                         }
 
-                        LORA.lock().unwrap().clear_event(LoraEvents::RX_PACKET_EVENT);
+                        LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
                         return LORA.lock().unwrap().recv(buffersize);
 
                     } else { // due to Lorawan protocol, blocking without timeout will prevent sending new Lora frames and consequently receiving data
-                        while LORA.lock().unwrap().get_events() & LoraEvents::RX_PACKET_EVENT == LoraEvents::NO_LORA_EVENT {
+                        while ! LORA_EVENTS.lock().unwrap().contains(LoraEvents::RX_PACKET_EVENT) {
                             thread::sleep(Duration::from_secs(1));
                         }
-                        LORA.lock().unwrap().clear_event(LoraEvents::RX_PACKET_EVENT);
+                        LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
                         return LORA.lock().unwrap().recv(buffersize);
                     }
                     trace!("[SOCKET][blocking recv] sucess");

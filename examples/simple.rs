@@ -86,7 +86,7 @@ fn main() {
     s.setsockopt(SOL_LORA, SO_CONFIRMED, 1);
 
     while true {
-//        s.settimeout(Some(10));
+        s.settimeout(Some(3));
         s.setblocking(true);
 
         let res = s.send("Hello");
@@ -109,6 +109,8 @@ fn main() {
             Ok(resp) => {
                 info!("[EXAMPLE]<<<<<<<<<< {:?} <<<<<<<<<<<", resp);
             }
+            Err(LwnsimError::CmdError(CmdErrorKind::NoDataDWrecv))=>
+                info!("[EXAMPLE] no data received yet"),
             Err(e) => {
                 error!("[EXAMPLE] receive error : {:?}", e);
                 break;

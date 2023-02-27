@@ -1,7 +1,7 @@
 #![allow(unused)]
 
 use super::error::{Error, Result};
-use super::lora_events::LoraEvents;
+use super::lora_events::{LORA_EVENTS, LoraEvents};
 use super::lwnsim::LWNSIM;
 use super::lwnsim::*;
 use super::lwnsim_cmd::*;
@@ -9,7 +9,6 @@ use serde::Serialize;
 use serde_json::json;
 
 use lazy_static::lazy_static;
-use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 // log
@@ -27,10 +26,8 @@ lazy_static! {
     pub static ref LORA: Mutex<LoraDev> = Mutex::new(LoraDev::new(LORAWAN, EU868));
 }
 
-static LORA_EVENTS: AtomicU64 = AtomicU64::new(0);
-
 #[derive(PartialEq)]
-enum LoraDevStatus {
+pub enum LoraDevStatus {
     Inactive,
     Active,
     Joined,
@@ -39,7 +36,7 @@ enum LoraDevStatus {
 pub struct LoraDev {
     status: LoraDevStatus,
     dev_eui: String,
-    lora_events: LoraEvents,
+    // lora_events: LoraEvents,
     // trigger: Option<usize>,
     //   handler: Option<F>,
     //   arg: Option<>,
@@ -51,7 +48,7 @@ impl LoraDev {
     fn new(mode: usize, region: usize) -> LoraDev {
         LoraDev {
             dev_eui: LWNSIM.lock().unwrap().get_dev_eui().to_string(),
-            lora_events: LoraEvents::NO_LORA_EVENT,
+            //lora_events: LoraEvents::NO_LORA_EVENT,
             // trigger: None,
             // handler : None,
             // arg : None,
@@ -65,11 +62,10 @@ impl LoraDev {
         return &self.dev_eui;
     }
 
-    fn set_status(&mut self, status: LoraDevStatus) {
+    pub fn set_status(&mut self, status: LoraDevStatus) {
         self.status = status;
     }
     pub fn activate(&mut self) -> Result<()> {
-
         if self.status == LoraDevStatus::Inactive {
             trace!("[LORA][activate]");
             let msg = DevExecuteCmd {
@@ -150,8 +146,13 @@ impl LoraDev {
         }
     }
 
-    pub fn has_joined(&self) -> bool {
-        return self.status == LoraDevStatus::Joined;
+    pub fn has_joined(&mut self) -> bool {
+        if LORA_EVENTS.lock().unwrap().contains(LoraEvents::JOIN_ACCEPT_EVENT){
+            self.set_status(LoraDevStatus::Joined);
+            true
+        }else {
+            false
+        }
     }
     pub fn send(&mut self, mtype: &str, pl: &str) -> Result<()> {
         if self.status == LoraDevStatus::Joined {
@@ -213,11 +214,11 @@ impl LoraDev {
         }
     }
 
-/*     pub fn events(&mut self) -> LoraEvents {
+    /*     pub fn events(&mut self) -> LoraEvents {
         let evt = self.lora_events;
         self.lora_events.clear();
         return evt;
-    } */
+    }
 
     pub fn get_events(& self) -> LoraEvents {
         return self.lora_events;
@@ -247,11 +248,12 @@ impl LoraDev {
         self.set_event(event_val);
 
         // for future async version ?
-        /* 		if self.lora_events & self.trigger{
-            trace!("[LORA][Event] triggers a callback");
-            self.handler();
-        } */
+        //  		if self.lora_events & self.trigger{
+        //     trace!("[LORA][Event] triggers a callback");
+        //     self.handler();
+        // }
     }
+    */
 
     // for future  async version ?
     /* 	fn callback(&mut self, trigger : Option<usize>, handler : Option<>, arg : Option <>){
