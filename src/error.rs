@@ -1,7 +1,7 @@
 use thiserror::Error;
-pub use rust_socketio::Error as SocketioErrorKind;
-pub use serde_json::Error as JsonError;
-pub use super::lwnsim_cmd::CmdErrorKind;
+use rust_socketio::Error as SocketioErrorKind;
+use serde_json::Error as JsonError;
+use super::lwnsim_cmd::CmdErrorKind;
 
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
