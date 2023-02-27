@@ -21,4 +21,5 @@ mod socket;
 pub use lwnsim::LWNSIM;
 pub use lora_dev::*;
 pub use socket::*;
+pub use error::{Error as LwnsimError, CmdErrorKind};
  
