@@ -39,7 +39,7 @@ enum LoraDevStatus {
 pub struct LoraDev {
     status: LoraDevStatus,
     dev_eui: String,
-    last_event: LoraEvents,
+    lora_events: LoraEvents,
     // trigger: Option<usize>,
     //   handler: Option<F>,
     //   arg: Option<>,
@@ -51,7 +51,7 @@ impl LoraDev {
     fn new(mode: usize, region: usize) -> LoraDev {
         LoraDev {
             dev_eui: LWNSIM.lock().unwrap().get_dev_eui().to_string(),
-            last_event: LoraEvents::NO_LORA_EVENT,
+            lora_events: LoraEvents::NO_LORA_EVENT,
             // trigger: None,
             // handler : None,
             // arg : None,
@@ -213,10 +213,22 @@ impl LoraDev {
         }
     }
 
-    pub fn events(&mut self) -> LoraEvents {
-        let evt = self.last_event;
-        self.last_event.clear();
+/*     pub fn events(&mut self) -> LoraEvents {
+        let evt = self.lora_events;
+        self.lora_events.clear();
         return evt;
+    } */
+
+    pub fn get_events(& self) -> LoraEvents {
+        return self.lora_events;
+    }
+
+    pub fn set_event(&mut self, evt : LoraEvents) {
+        self.lora_events |= evt;
+    }
+
+    pub fn clear_event(&mut self, evt : LoraEvents) {
+        self.lora_events &= !evt;
     }
 
     pub fn handle_lora_event(&mut self, event_val: LoraEvents) {
@@ -229,11 +241,13 @@ impl LoraDev {
             self.status = LoraDevStatus::Unjoined;
             return;
         }
+        // set TX and RX type events
+        // these events are used for blocking send and receive and possibly for async version in the futures
         trace!("[LORA][Event]{:?}", event_val);
-        self.last_event |= event_val;
+        self.set_event(event_val);
 
         // for future async version ?
-        /* 		if self.last_event & self.trigger{
+        /* 		if self.lora_events & self.trigger{
             trace!("[LORA][Event] triggers a callback");
             self.handler();
         } */
