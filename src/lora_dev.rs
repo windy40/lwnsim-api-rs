@@ -80,6 +80,7 @@ impl LoraDev {
             {
                 CmdErrorKind::DevCmdOK => {
                     self.set_status(LoraDevStatus::Active);
+                    info!("[LORA][activate]OK");
                     return Ok(());
                 }
                 k => {
@@ -106,6 +107,7 @@ impl LoraDev {
             {
                 CmdErrorKind::DevCmdOK => {
                     self.set_status(LoraDevStatus::Inactive);
+                    info!("[LORA][unlink_dev]OK");
                     return Ok(());
                 }
                 k =>
@@ -133,7 +135,7 @@ impl LoraDev {
             }
         }
         if self.status == LoraDevStatus::Active || self.status == LoraDevStatus::Unjoined {
-            trace!("[LORA][join]");
+            info!("[LORA][join]start");
             let msg: DevExecuteCmd = DevExecuteCmd {
                 cmd: CMD_JOIN_REQUEST.to_string(),
                 ack: false,

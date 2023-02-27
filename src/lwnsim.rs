@@ -105,24 +105,24 @@ impl Lwnsim {
                 if let Payload::String(pl_str) = payload {
                     trace!("[LWNSIM][LORA EVENT]{:?}", pl_str);
                     let lora_event: DevLoraEvent = serde_json::from_str(&pl_str)
-                        .expect("[LWNSIM][ParseDevLoraEventError] json error");
+                        .expect("[LWNSIM][ParseDevLoraEventError]json error");
                     LWNSIM.lock().unwrap().push_lora_event(lora_event.event);
                 } else {
-                    warn!("[LWNSIM][ParseDevLoraEventError] not the String variant");
+                    warn!("[LWNSIM][ParseDevLoraEventError]not the String variant");
                 }
             })
             // .on("error", |err, _| eprintln!("Error: {:#?}", err))
             .opening_header("accept-encoding", "application/json")
             .connect()
             .expect("Connection failed");
-        trace!("[LWNSIM][connect]");
+        info!("[LWNSIM][connect]");
         self.socket = Some(socket);
         self.status = LwnsimStatus::ConnOK;
     }
 
     pub fn disconnect(&self) {
         if let Some(s) = &self.socket {
-            trace!("[LWNSIM][disconnect]");
+            info!("[LWNSIM][disconnect]");
             s.disconnect().expect("Disconnect failed");
         }
     }

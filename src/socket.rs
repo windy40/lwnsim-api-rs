@@ -83,10 +83,10 @@ impl Socket {
         }
 
         if self.blocking {
-            trace!("[SOCKET][blocking send (timeout= {:?})]MType= {} data= {}",self.timeout, mtype, data);           
+            debug!("[SOCKET][blocking send (timeout= {:?})]MType= {} data= {}",self.timeout, mtype, data);           
             LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::TX_PACKET_EVENT|LoraEvents::TX_FAILED_EVENT);
         }else{
-            trace!("[SOCKET][send]MType= {} data= {}", mtype, data);
+            debug!("[SOCKET][send]MType= {} data= {}", mtype, data);
         }
 
         LORA.lock().unwrap().send(mtype, data)?;
@@ -106,19 +106,22 @@ impl Socket {
                 }
             }
             if LORA_EVENTS.lock().unwrap().contains_and_remove_event(LoraEvents::TX_PACKET_EVENT) {
-                trace!("[SOCKET][blocking send] sucess");
+                debug!("[SOCKET][blocking send]OK");
             }
             if LORA_EVENTS.lock().unwrap().contains_and_remove_event(LoraEvents::TX_FAILED_EVENT){
-                trace!("[SOCKET][blocking send] failed");
+                debug!("[SOCKET][blocking send]failed");
             }
         }
         Ok(())
     }
 
     pub fn recv(&self, buffersize: usize) -> Result<String> {
-        trace!("[SOCKET][recv]Buffersize={}", buffersize);
+        debug!("[SOCKET][recv]Buffersize={}", buffersize);
         if self.blocking {
+            debug!("[SOCKET][blocking recv]Buffersize={}", buffersize);
             LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
+        }else {
+            debug!("[SOCKET][recv]Buffersize={}", buffersize);
         }
         let mut recv_buf = LORA.lock().unwrap().recv(buffersize);
         match recv_buf {
@@ -129,6 +132,7 @@ impl Socket {
                         let start_time = Instant::now();
                         while ! LORA_EVENTS.lock().unwrap().contains(LoraEvents::RX_PACKET_EVENT) {
                             if start_time.elapsed().as_secs() > dur.try_into().unwrap() {
+                                debug!("[SOCKET][blocking recv][error]timeout");
                                 return Err(Error::CmdError(CmdErrorKind::DevCmdTimeout));
                             }
                             thread::sleep(Duration::from_secs(1));
@@ -144,8 +148,9 @@ impl Socket {
                         LORA_EVENTS.lock().unwrap().clear_events(LoraEvents::RX_PACKET_EVENT);
                         return LORA.lock().unwrap().recv(buffersize);
                     }
-                    trace!("[SOCKET][blocking recv] sucess");
+                    debug!("[SOCKET][blocking recv] success");
                 }else{
+                    debug!("[SOCKET][recv][error]no downlink data received");
                     return Err(Error::CmdError(CmdErrorKind::NoDataDWrecv))
                 }
             }
